@@ -9,7 +9,9 @@ def dissect(data_queue, channel):
 
         ethernet_data = data_queue.get()
         dst_mac, src_mac, protocol, data = ethernet_dissect(ethernet_data)
-
+        
+        print("the ethernet protocol is %s" % protocol)
+        #print("the rest of the packet is %x" % data)
         if protocol == EthernetProtocol.ARP:
             arp_dissect(data)
         
@@ -27,7 +29,7 @@ def dissect(data_queue, channel):
 
 class EthernetProtocol():
     IPV4 = 0x0008
-    ARP = 0x0806
+    ARP = 0x0608
 
 class IPProtocol():
     ICMP = 1
@@ -43,7 +45,29 @@ def mac_format(mac):
     return ':'.join(mac).upper()
 
 def arp_dissect(arp_data):
-    # UNIMPLEMENTED
+    # TODO: Finish implementation
+    
+    # skip the hardware type
+    # H is protocol type (ipv4)
+    # skip the hardware and protocol size
+    #   Hardware size is the number of bytes in the mac address.
+    #   Protocol size is the number of bytes in the ip address
+    #   I don't think there is any reason to suppose it won't be these two values.
+    # H is ARP opcode
+    protocol, opcode = unpack('!2x H 2x H', arp_data[:8])
+    arp_data = arp_data[8:]
+    print("the protocol is %s and the opcode is %s" % (protocol, opcode))
+
+    # Even though we can normally assume the sizes will be 6 and 4, lets at least
+    # verify the protocol type is IPv4 and not IPv6, so that we don't run into
+    # any errors.
+    if protocol == 0x0800:
+
+        #sender_mac, sender_ip, target_mac, target_ip = unpack('!6B 4B 6B 4B', arp_data[:20])
+        sender_mac, sender_ip, target_mac, target_ip = unpack('!6s 4s 6s 4s', arp_data[:20])
+        print('sender mac: %s\nsender ip: %s\ntarget mac: %s\ntarget ip: %s' %
+            (sender_mac, sender_ip, target_mac, target_ip))
+    
     return arp_data
 
 def ipv4_dissect(ip_data):

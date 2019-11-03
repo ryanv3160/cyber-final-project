@@ -16,7 +16,7 @@ ifr.ifr_ifrn = b'eth0'
 
 def get_promiscuous_socket():
     # Note: AF_PACKET does not work on Mac, but works on Linux
-    sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0800))
+    sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0806))
     fcntl.ioctl(sock.fileno(), SIOCGIFFLAGS, ifr)
     ifr.ifr_flags |= IFF_PROMISC
     fcntl.ioctl(sock.fileno(), SIOCSIFFLAGS, ifr)

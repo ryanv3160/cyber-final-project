@@ -5,7 +5,7 @@ from queue import Queue
 from time import sleep
 
 from sniffer import sniff
-from sniffer import dissect
+from dissector import dissect
 from detector import detect
 
 def main():

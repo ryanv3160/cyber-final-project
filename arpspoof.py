@@ -1,14 +1,105 @@
 #!/usr/bin/env python3
 
+# usage: arpspoof.py -t target -i ip [-r rate] [-m mac] [-b] [-f] [-c]
+# 
+# OPTIONS
+#
+#   -h, --help
+#       Display this dialogue
+#
+#   -t, --tell <target>
+#       Send this IP address the ARP spoof
+#
+#   -i, --ip <impersonated-ip>
+#       This is the IP we are impersonating
+#
+#   -m, --mac <impersonating-mac>
+#       This is the MAC address to send in the request
+#       If it isn't specified, we use our MAC address
+#
+#   -r, --rate <milliseconds>
+#       The rate in milliseconds between sending packets
+#
+#   -b, --both-ways
+#       In addition to the normal ARP spoof sent, a
+#       packet will also be sent to the IP we are
+#       impersonating in order to assume the identity
+#       of the other IP.
+#
+#   -f, --forward-ip
+#       Whether or not this program should modify the
+#       system configuration to forward ips
+#
+#   -c, --cleanup
+#       On exit, send correct ARP packets
+#
+#   --man-in-the-middle
+#       Equivalent to using -b, -f, and -c
+
+# Note: Although IP forwarding should be enabled for
+# the -b option, I'm not sure how it behaves without it.
+# I'm also not sure if it makes sense to control IP
+# forwarding from this program, so it is specified as an
+# option. It should be as simple as writing a 0 or 1
+# to a system file.
+
 import socket
+import argparse
 from struct import pack
 from uuid import getnode as get_mac
 
-def main():
+parser = argparse.ArgumentParser(
+    # TODO: Add more of a description. Note: we may also use epilogue and prologue.
+    description = 'ARP spoofer',
+    formatter_class = lambda prog: argparse.RawTextHelpFormatter(prog, max_help_position=0)
+)
+
+parser._action_groups.pop()
+required = parser.add_argument_group('required arguments')
+optional = parser.add_argument_group('optional arguments')
+
+t_help='''
+       Send this IP address the ARP spoof
+
+'''
+
+i_help='''
+       This is the IP we are impersonating
+
+'''
+
+m_help='''
+       This is the MAC address to send in the request
+       If it isn't specified, we use our MAC address
+
+'''
+
+b_help='''
+       In addition to the normal ARP spoof sent, a
+       packet will also be sent to the IP we are
+       impersonating in order to assume the identity
+       of the other IP. This allows for us to make
+       a MITM attack, assumping ip forwarding is enabled.
+
+'''
+
+# TODO: Validate the IP address and MAC address (we did this before)
+def parse_ip(ip):
+    return ip
+
+def parse_mac(mac):
+    return mac
+
+def main(args):
     # TODO: fetch required information from args to pack
     #dest_ip = [10, 7, 31, 99]
     #local_mac = [int(("%x" % get_mac())[i:i+2], 16) for i in range(0, 12, 2)]
     #binascii.hexlify(bytes(hex(get_mac()).encode('UTF-8')))
+
+    print(args.target)
+    print(args.ip)
+    print(args.mac)
+    print("both: ", args.both)
     
     s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3))
     s.bind(("eth0", 0))
@@ -46,6 +137,21 @@ def main():
     s.close()
 
 if __name__ == "__main__":
-    while True:
-        main()
+    
+    required.add_argument('-t', '--tell', dest='target', metavar='target',
+        type=parse_ip, help=t_help, required=True)
+    
+    required.add_argument('-i', '--ip', dest='ip', metavar='ip',
+        type=parse_ip, help=i_help, required=True)
+    
+    optional.add_argument('-m', '--mac', dest='mac', metavar='mac',
+        type=parse_mac, help=m_help)
+    
+    optional.add_argument('-b', '--both-ways', dest='both',
+        action='store_true', help=b_help)
+    
+    args = parser.parse_args()
+    #args.rate
+    #while True:
+    main(args)
 

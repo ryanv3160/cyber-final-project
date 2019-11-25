@@ -85,6 +85,7 @@ i_help='''
 
 r_help='''
        The rate in milliseconds to send ARP packets.
+
 '''
 
 m_help='''
@@ -108,29 +109,6 @@ def parse_ip(ip):
 
 def parse_mac(mac):
     return mac
-
-# In order to recieve the MAC addresses needed for this MAC and for the IP
-# we will use cat on specific files on the linux system.
-# 
-# There are a suite of other things we can do instead ie. 1) use a library
-# (tried, didn't work), 2) implement our own address resolution (too
-# complicated) or 3) have the user supply the MAC address information
-#
-# I have a small aversion to using system commands because they aren't portable
-# and because there is a fine line between what commands make sense to use and
-# which do not. For instance, the detector code shouldn't use the /proc/net/arp
-# file at all. In the end, we are not truly concerned about portability. We are
-# sending packets in such a way I believe it will only work on Linux anyway.
-# 
-# Commands:
-# 
-# cat /sys/class/net/eth0/address 
-# 00:0c:29:80:68:cf
-# 
-# cat /proc/net/arp
-# IP address       HW type     Flags       HW address            Mask     Device
-# 192.168.10.254   0x1         0x2         00:50:56:f4:25:3c     *        eth0
-# 192.168.10.2     0x1         0x2         00:50:56:f6:c7:3a     *        eth0
 
 # Linux-only solution
 # Tested on Kali linux, note this may not necessarily work on other linux platforms

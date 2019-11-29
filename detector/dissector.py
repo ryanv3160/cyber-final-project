@@ -1,7 +1,6 @@
 import socket
-import psocket
 from struct import unpack
-from datetime import datetime
+import time
     
 def dissect(data_queue, channel):
 
@@ -10,10 +9,9 @@ def dissect(data_queue, channel):
         ethernet_data = data_queue.get()
         dst_mac, src_mac, protocol, data = ethernet_dissect(ethernet_data)
         
-        print("the ethernet protocol is %s" % protocol)
-        #print("the rest of the packet is %x" % data)
+        #print("the ethernet protocol is %s" % protocol)
         if protocol == EthernetProtocol.ARP:
-            arp_dissect(data)
+            arp_dissect(data, channel)
         
         # table = channel.get()
         # key = (src_ip, dst_ip, dst_port)
@@ -40,11 +38,8 @@ def ethernet_dissect(ethernet_data):
     dst_mac, src_mac, protocol = unpack('!6s 6s H', ethernet_data[:14])
     return mac_format(dst_mac), mac_format(src_mac), socket.htons(protocol), ethernet_data[14:]
 
-def mac_format(mac):
-    mac = map('{:02x}'.format, mac)
-    return ':'.join(mac).upper()
 
-def arp_dissect(arp_data):
+def arp_dissect(arp_data, channel):
     # TODO: Finish implementation
     
     # skip the hardware type
@@ -56,17 +51,16 @@ def arp_dissect(arp_data):
     # H is ARP opcode
     protocol, opcode = unpack('!2x H 2x H', arp_data[:8])
     arp_data = arp_data[8:]
-    print("the protocol is %s and the opcode is %s" % (protocol, opcode))
+    #print("the protocol is %s and the opcode is %s" % (protocol, opcode))
 
     # Even though we can normally assume the sizes will be 6 and 4, lets at least
     # verify the protocol type is IPv4 and not IPv6, so that we don't run into
     # any errors.
     if protocol == 0x0800:
 
-        #sender_mac, sender_ip, target_mac, target_ip = unpack('!6B 4B 6B 4B', arp_data[:20])
         sender_mac, sender_ip, target_mac, target_ip = unpack('!6s 4s 6s 4s', arp_data[:20])
-        print('sender mac: %s\nsender ip: %s\ntarget mac: %s\ntarget ip: %s' %
-            (sender_mac, sender_ip, target_mac, target_ip))
+        entry = (mac_format(sender_mac), ipv4_format(sender_ip), mac_format(target_mac), ipv4_format(target_ip), time.time())
+        channel.put(entry)
     
     return arp_data
 
@@ -90,3 +84,6 @@ def udp_dissect(transport_data):
     source_port, dst_port = unpack('!HH', transport_data[:4])
     return source_port, dst_port
 
+def mac_format(mac):
+    mac = map('{:02x}'.format, mac)
+    return ':'.join(mac).upper()

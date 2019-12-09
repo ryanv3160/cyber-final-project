@@ -3,6 +3,7 @@
 from threading import Thread
 from queue import Queue
 from time import sleep
+import sys
 
 from sniffer import sniff
 from dissector import dissect
@@ -15,12 +16,15 @@ def main():
     channel = Queue()
     table = {}
     channel.put(table)
+
+
+    rate_time_threshold, rate_ips = commandLineParser()
     
     print("ARP Spoofer detector initialized")
     print("press [Ctrl+C] to quit")
     sniffer = Thread(target=sniff, args=(data_queue,)) 
     dissector = Thread(target=dissect, args=(data_queue, channel))
-    detector = Thread(target=detect, args=(channel,))
+    detector = Thread(target=detect, args=(channel, rate_time_threshold, rate_ips))
      
     sniffer.daemon = True
     dissector.daemon = True
@@ -52,6 +56,11 @@ def main():
     except KeyboardInterrupt:
         print()
     '''
+
+def commandLineParser():
+    if len(sys.argv) < 2:
+        print("Missing command line arguments")
+    return sys.argv[0], sys.argv[1]
 
 if __name__ == "__main__": 
     main()
